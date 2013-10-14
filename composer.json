@@ -14,7 +14,7 @@
         }
     ],
     "require": {
-    	"ext-soap":"*"
+    	"ext-soap":"*",
         "php": ">=5.*.*",
         "roundcube/plugin-installer": ">=0.1.3"
     },
