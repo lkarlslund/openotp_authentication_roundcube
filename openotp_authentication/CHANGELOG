@@ -1,0 +1,19 @@
+1.1.0
+	 - Plugin has been completely re-writen.
+	 - Changed the plugin behavior with OpenOTP Challenge-Response.
+	   > The plugin displays an overlay on Challenge-Response session.
+	   > No modification of the RoundCube login form.
+
+1.0.2
+     - Added support for OpenOTP v1.1 and SimpleLogin method.
+       The plugin will now transparently support any OpenOTP Login Mode including:
+       > LDAP only
+       > OTP only
+       > LDAP+OTP with user challenge-response
+
+1.0.1
+     - Added compatibility with OpenOTP 1.0.17.
+     - Added support for location-based policies in WebADM 1.2.3 & OpenOTP 1.0.17.
+
+1.0.0
+     Initial public release.

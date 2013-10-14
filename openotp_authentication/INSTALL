@@ -1,0 +1,27 @@
+This plugin is for use with RoundCube Webmail.
+
+To install and configure the OpenOTP plugin, proceed as follows:
+
+1) Copy the openotp_authentication folder in the plugins/ directory under your
+   RoundCube base installation directory.
+   
+2) If your PHP installation does not have the soap extension, install the 
+   php-soap package for your Linux distribution.
+   With RedHat, do it with 'yum install php-soap'.
+   
+3) Go to the plugins/openotp_authentication/ directory under your RoundCube base
+   installation directory and copy the config.inc.php.dist file to config.inc.php.
+   Edit the config.inc.php file and change the openotp_server_url to your OpenOTP server URL.
+   Note: You can get your server URL in WebADM, under the Application menu.
+   
+4) Edit the main RoundCube configuration file (config/main.inc.php) under the 
+   RoundCube base directory.
+   Add the plugin to the plugin list setting ($rcmail_config['plugins'])
+
+Note that you must use OpenOTP LDAPOTP Login mode with this plugin because the plugin
+has to get the user LDAP password in order to connect the IMAP back-end. Also note 
+that the IMAP server should use the same LDAP server as OpenOTP. It is highly 
+recommended to use IMAP with PAM-LDAP and to connect OpenOTP to the same LDAP server.
+
+That's all. You can now use your WebADM users in RoundCube.
+
