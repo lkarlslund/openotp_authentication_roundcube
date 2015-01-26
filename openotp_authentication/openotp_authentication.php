@@ -80,8 +80,9 @@ class openotp_authentication extends rcube_plugin {
     public function login_form($form) {
 		
 		if ($this->username != NULL && $this->state != NULL && $this->ldappw != NULL){
-			$otp_script = $this->openotp_auth->getOverlay($this->message, $this->username, $this->state, $this->timeout, $this->ldappw, $this->domain);
+			$otp_script = $this->openotp_auth->getOverlay($this->otpChallenge, $this->u2fChallenge, $this->message, $this->username, $this->state, $this->timeout, $this->ldappw, $this->domain);
 			$rcmail = rcmail::get_instance();
+			$rcmail->output->add_header('<script type="text/javascript" src="chrome-extension://pfboblefjcgdjicmnffhdgionmgcdmne/u2f-api.js"></script>');
 			$rcmail->output->add_script($otp_script, 'docready');				
 		}		
 		
@@ -104,10 +105,12 @@ class openotp_authentication extends rcube_plugin {
 		
 		$username = get_input_value('openotp_username', RCUBE_INPUT_POST) != NULL ? get_input_value('openotp_username', RCUBE_INPUT_POST) : $data['user'];
 		$password = get_input_value('openotp_password', RCUBE_INPUT_POST) != NULL ? get_input_value('openotp_password', RCUBE_INPUT_POST) : $data['pass'];
+		$u2f = $_POST['openotp_u2f'] != NULL ? $_POST['openotp_u2f'] : "";
 		$state = get_input_value('openotp_state', RCUBE_INPUT_POST);
 		$ldappw = get_input_value('openotp_ldappw', RCUBE_INPUT_POST);
 
-		if (empty($username) || empty($password)) {
+		
+		if (empty($username) || empty($ldappw)) {
 			$data['valid'] = false;
 			return $data;
 		}
@@ -132,7 +135,7 @@ class openotp_authentication extends rcube_plugin {
 				return $data;
 			}
 			// OpenOTP Challenge
-			$resp = $this->openotp_auth->openOTPChallenge($username, $this->domain, $state, $password);
+			$resp = $this->openotp_auth->openOTPChallenge($username, $this->domain, $state, $password, $u2f);
 		} else {
 			// OpenOTP Login
 			$resp = $this->openotp_auth->openOTPSimpleLogin($username, $this->domain, utf8_encode($password), $_SERVER['REMOTE_ADDR']);
@@ -165,6 +168,8 @@ class openotp_authentication extends rcube_plugin {
 				$this->state = $resp['session'];
 				$this->timeout = $resp['timeout'];
 				$this->ldappw = $data['pass'];
+				$this->otpChallenge = $resp['otpChallenge'];
+				$this->u2fChallenge = $resp['u2fChallenge'];
 				$this->username = $username;
 				$data['abort'] = true;
 				break;

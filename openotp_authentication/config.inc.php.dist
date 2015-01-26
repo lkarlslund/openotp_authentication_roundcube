@@ -11,7 +11,8 @@ $rcmail_config['openotp_server_url'] = 'http://localhost:8080/openotp/';
 $rcmail_config['openotp_client_id'] = 'RoundCube';
 $rcmail_config['openotp_default_domain'] = NULL;
 
-// LDAP passwords is required to access your mail server with the user credentials 
+// LDAP passwords is required to access your mail server with the user credentials,
+// If you configure u2f on WebADM, please change this setting to 'OpenOTP.LoginMode=LDAPU2F' or 'OpenOTP.LoginMode=LDAPMFA'
 $rcmail_config['openotp_user_settings'] = 'OpenOTP.LoginMode=LDAPOTP';
 
 $rcmail_config['openotp_proxy_host'] = NULL;

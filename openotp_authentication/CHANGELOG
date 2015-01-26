@@ -1,4 +1,6 @@
-1.1.0
+1.2.0
+ 	 - Added support for OpenOTP v1.2 and FIDO U2F authentication. 
+1.1.0 
 	 - Plugin has been completely re-writen.
 	 - Changed the plugin behavior with OpenOTP Challenge-Response.
 	   > The plugin displays an overlay on Challenge-Response session.

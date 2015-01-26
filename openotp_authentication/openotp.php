@@ -1,7 +1,7 @@
 <?php
 /*
  RCDevs OpenOTP Plugin for RoundCube Webmail v2.0
- Copyright (c) 2010-2012 RCDevs, All rights reserved.
+ Copyright (c) 2010-2013 RCDevs, All rights reserved.
  
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
@@ -87,7 +87,7 @@ class openotp {
 		return $ret;
 	}
 	
-	public function getOverlay($message, $username, $session, $timeout, $ldappw, $domain){
+	public function getOverlay($otpChallenge, $u2fChallenge, $message, $username, $session, $timeout, $ldappw, $domain){
 		$overlay = <<<EOT
 		function addOpenOTPDivs(){
 			var overlay_bg = document.createElement("div");
@@ -123,8 +123,15 @@ class openotp {
 			overlay.style.MozBoxShadow = '1px 1px 12px #555555';
 			overlay.style.zIndex = "9999"; 
 			overlay.innerHTML = '<a style="position:absolute; top:-12px; right:-12px;" href="./" title="close"><img src="$this->home/openotp_closebtn.png"/></a>'
+			+ '<style>'
+			+ 'blink { -webkit-animation: blink 1s steps(5, start) infinite; -moz-animation:    blink 1s steps(5, start) infinite; -o-animation:      blink 1s steps(5, start) infinite; animation: blink 1s steps(5, start) infinite; }'
+			+ '	@-webkit-keyframes blink { to { visibility: hidden; } }'
+			+ '@-moz-keyframes blink { to { visibility: hidden; } }'
+			+ '@-o-keyframes blink { to { visibility: hidden; } }'
+			+ '@keyframes blink { to { visibility: hidden; } }'
+			+ '</style>'				
 			+ '<div style="background-color:red; margin:0 -40px 0; height:4px; width:360px; padding:0;" id="count_red"><div style="background-color:orange; margin:0; height:4px; width:360px; padding:0;" id="div_orange"></div></div>'
-			+ '<form style="margin-top:30px;" action="./" name="login" method="POST">'
+			+ '<form style="margin-top:30px;" action="./" name="login" id="login-form-otp"  method="POST">'
 			+ '<input type="hidden" name="_token" value="'+tokenform+'">'
 			+ '<input type="hidden" name="_task" value="login">'
 			+ '<input type="hidden" name="_action" value="login">'
@@ -135,8 +142,25 @@ class openotp {
 			+ '<table width="100%">'
 			+ '<tr><td style="text-align:center; font-weight:bold; font-size:14px;">$message</td></tr>'
 			+ '<tr><td id="timout_cell" style="text-align:center; padding-top:4px; font-weight:bold; font-style:italic; font-size:11px;">Timeout: <span id="timeout">$timeout seconds</span></td></tr>'
+EOT;
+	
+			if( $otpChallenge || ( !$otpChallenge && !$u2fChallenge ) ){
+			$overlay .= <<<EOT
 			+ '<tr><td id="inputs_cell" style="text-align:center; padding-top:25px;"><input style="border:1px solid grey; background-color:white;" type="text" size=15 name="openotp_password">&nbsp;'
 			+ '<input style="padding:3px 10px;" type="submit" value="Ok" class="button mainaction"></td></tr>'
+EOT;
+			}
+			
+			if( $u2fChallenge ){		
+			$overlay .= "+ '<tr style=\"border:none;\"><td id=\"inputs_cell\" style=\"text-align:center; padding-top:5px; border:none;\"><input type=\"hidden\" name=\"openotp_u2f\" value=\"\">'";
+				if( $otpChallenge ){		
+					$overlay .= "+ '<b>U2F response</b> &nbsp; <blink id=\"u2f_activate\">[Activate Device]</blink></td></tr>'";
+				} else { 
+					$overlay .= "+ '<img src=\"" . $this->home . "/u2f.png\"><br><br><blink id=\"u2f_activate\">[Activate Device]</blink></td></tr>'";
+				}			
+			}		
+			
+			$overlay .= <<<EOT
 			+ '</table></form>';
 			
 			document.body.appendChild(overlay_bg);    
@@ -165,8 +189,43 @@ class openotp {
 			c--;
 		}
 		count();
-		var timer = setInterval(function() {count(); }, 1000);
+		
+		
+		function getInternetExplorerVersion() {
+		
+			var rv = -1;
+		
+			if (navigator.appName == "Microsoft Internet Explorer") {
+				var ua = navigator.userAgent;
+				var re = new RegExp("MSIE ([0-9]{1,}[\.0-9]{0,})");
+				if (re.exec(ua) != null)
+					rv = parseFloat(RegExp.$1);
+			}
+			return rv;
+		}
+		
+		var ver = getInternetExplorerVersion();
+		
+		if (navigator.appName == "Microsoft Internet Explorer"){
+			if (ver <= 10){
+				toggleItem = function(){
+					
+				    var el = document.getElementsByTagName("blink")[0];
+				    if (el.style.display === "block") {
+				        el.style.display = "none";
+				    } else {
+				        el.style.display = "block";
+				    }
+				}
+				var t = setInterval(function() {toggleItem; }, 1000);
+			}
+		}
+		
+		var timer = setInterval(function() {count();  }, 1000);
 EOT;
+
+		if( $u2fChallenge ) $overlay .= " if (typeof u2f !== 'object' || typeof u2f.sign !== 'function'){ var u2f_activate = document.getElementById('u2f_activate'); u2f_activate.innerHTML = '[Not Supported]'; u2f_activate.style.color='red'; }" . "\r\n";
+		if( $u2fChallenge ) $overlay .= " else { console.log(".$u2fChallenge.");  u2f.sign([".$u2fChallenge."], function(response) { document.getElementsByName('openotp_u2f')[0].value = JSON.stringify(response); document.getElementById('login-form-otp').submit(); }, $timeout ); }" . "\r\n";
 
 		return $overlay;
 	}
@@ -182,6 +241,8 @@ EOT;
 				$options['proxy_password'] = $this->proxy_password;
 			}
 		}
+		ini_set('soap.wsdl_cache_enabled', '0');
+		ini_set('soap.wsdl_cache_ttl', '0'); 
 			
 		$soap_client = new SoapClient(dirname(__FILE__).'/openotp.wsdl', $options);
 		if (!$soap_client) {
@@ -199,9 +260,9 @@ EOT;
 		return $resp;
 	}
 	
-	public function openOTPChallenge($username, $domain, $state, $password){
+	public function openOTPChallenge($username, $domain, $state, $password, $u2f){
 		if (!$this->soapRequest()) return false;
-		$resp = $this->soap_client->openotpChallenge($username, $domain, $state, $password);
+		$resp = $this->soap_client->openotpChallenge($username, $domain, $state, $password, $u2f);
 		
 		return $resp;
 	}
