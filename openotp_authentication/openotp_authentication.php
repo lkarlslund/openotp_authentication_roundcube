@@ -1,7 +1,7 @@
 <?php
 /*
- RCDevs OpenOTP Plugin for RoundCube Webmail v2.0
- Copyright (c) 2010-2012 RCDevs, All rights reserved.
+ RCDevs OpenOTP Plugin for RoundCube Webmail v1.2.3
+ Copyright (c) 2010-2016 RCDevs, All rights reserved.
  
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
@@ -37,6 +37,7 @@ class openotp_authentication extends rcube_plugin {
 		$this->add_hook('template_object_loginform', array($this, 'login_form'));
 	    $rcmail = rcmail::get_instance();
 		$this->rc = $rcmail;
+		
 	}
 	
 
@@ -79,12 +80,22 @@ class openotp_authentication extends rcube_plugin {
 
     public function login_form($form) {
 		
+		$rcmail = rcmail::get_instance();
+
 		if ($this->username != NULL && $this->state != NULL && $this->ldappw != NULL){
 			$otp_script = $this->openotp_auth->getOverlay($this->otpChallenge, $this->u2fChallenge, $this->message, $this->username, $this->state, $this->timeout, $this->ldappw, $this->domain);
-			$rcmail = rcmail::get_instance();
-			$rcmail->output->add_header('<script type="text/javascript" src="chrome-extension://pfboblefjcgdjicmnffhdgionmgcdmne/u2f-api.js"></script>');
-			$rcmail->output->add_script($otp_script, 'docready');				
+			//$rcmail->output->add_header('<script type="text/javascript" src="chrome-extension://pfboblefjcgdjicmnffhdgionmgcdmne/u2f-api.js"></script>');
+			$rcmail->output->add_header('<script type="text/javascript" src="plugins/openotp_authentication/fidou2f.js"></script>');
+			$rcmail->output->add_script($otp_script, 'docready');
 		}		
+
+		$inline_js = "
+			jQuery('#login-form form').submit(function () {
+				jQuery(this).prepend(\"<span style='color:white; text-shadow: 0px 1px 1px black; font-size:0.9em;'>Processing request. Please wait...</span>\");
+				return true;
+			});";
+
+		$rcmail->output->add_script($inline_js, 'docready');
 		
 		$table = new html_table(array('cols' => 1));
 		if ($this->message != NULL) $table->add('title', html::label('openotmessage', '<font color=red>'.$this->message.'</font>'));
@@ -102,6 +113,14 @@ class openotp_authentication extends rcube_plugin {
 			$data['valid'] = false;
 			return $data;
 		}
+
+		// Get context cookie
+		$context_name = $this->openotp_auth->getContext_name();
+		$context_size = $this->openotp_auth->getContext_size();
+		$context_time = $this->openotp_auth->getContext_time();
+		
+		if (isset($_COOKIE[$context_name])) $context = $_COOKIE[$context_name];
+		else $context = NULL;	
 		
 		$username = get_input_value('openotp_username', RCUBE_INPUT_POST) != NULL ? get_input_value('openotp_username', RCUBE_INPUT_POST) : $data['user'];
 		$password = get_input_value('openotp_password', RCUBE_INPUT_POST) != NULL ? get_input_value('openotp_password', RCUBE_INPUT_POST) : $data['pass'];
@@ -110,11 +129,11 @@ class openotp_authentication extends rcube_plugin {
 		$ldappw = get_input_value('openotp_ldappw', RCUBE_INPUT_POST);
 
 		
-		if (empty($username) || empty($ldappw)) {
+		if (empty($username)) {
 			$data['valid'] = false;
 			return $data;
 		}
-
+		
 		$t_domain = $this->openotp_auth->getDomain($username);
 		if (is_array($t_domain)){
 			$username = $t_domain['username'];
@@ -138,7 +157,7 @@ class openotp_authentication extends rcube_plugin {
 			$resp = $this->openotp_auth->openOTPChallenge($username, $this->domain, $state, $password, $u2f);
 		} else {
 			// OpenOTP Login
-			$resp = $this->openotp_auth->openOTPSimpleLogin($username, $this->domain, utf8_encode($password), $_SERVER['REMOTE_ADDR']);
+			$resp = $this->openotp_auth->openOTPSimpleLogin($username, $this->domain, utf8_encode($password), $_SERVER['REMOTE_ADDR'], $context);
 			if(!$resp){
 				write_log('errors', 'Could not load OpenOTP WSDL file');
 				$data['valid'] = false;
@@ -161,6 +180,13 @@ class openotp_authentication extends rcube_plugin {
 			case 1:
 				$data['user'] = $username;
 				$data['pass'] = isset($ldappw) ? $ldappw : $password;
+				
+				// set context cookie
+				if (extension_loaded('openssl')) {			
+					if (strlen($context) != $context_size) $context = bin2hex(openssl_random_pseudo_bytes($context_size/2));
+					setcookie($context_name, $context, time()+$context_time, '/', NULL, true, true);
+				}				
+				
 				$data['valid'] = true;
 				break;
 			case 2:

@@ -1,7 +1,7 @@
 <?php
 /*
- RCDevs OpenOTP Plugin for RoundCube Webmail v2.0
- Copyright (c) 2010-2013 RCDevs, All rights reserved.
+ RCDevs OpenOTP Plugin for RoundCube Webmail v1.2.3
+ Copyright (c) 2010-2016 RCDevs, All rights reserved.
  
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
@@ -31,6 +31,9 @@ class openotp {
 	private $proxy_username;
 	private $proxy_password;
 	private $soap_client;
+	private $context_name = 'OpenOTPContext';
+	private $context_size = 32;
+	private $context_time = 2500000;	
 
 	public function __construct($openotp_plugin, $home=''){
 		
@@ -69,6 +72,19 @@ class openotp {
 	{
 		return $this->openotp_auth;
 	}
+	
+	public function getContext_name()
+	{
+		return $this->context_name;
+	}
+	public function getContext_size()
+	{
+		return $this->context_size;
+	}	
+	public function getContext_time()
+	{
+		return $this->context_time;
+	}	
 		
 	public function getServer_url()
 	{
@@ -146,7 +162,7 @@ EOT;
 	
 			if( $otpChallenge || ( !$otpChallenge && !$u2fChallenge ) ){
 			$overlay .= <<<EOT
-			+ '<tr><td id="inputs_cell" style="text-align:center; padding-top:25px;"><input style="border:1px solid grey; background-color:white;" type="text" size=15 name="openotp_password">&nbsp;'
+			+ '<tr><td id="inputs_cell" style="text-align:center; padding-top:25px;"><input style="border:1px solid grey; background-color:white;" type="password" size=15 name="openotp_password">&nbsp;'
 			+ '<input style="padding:3px 10px;" type="submit" value="Ok" class="button mainaction"></td></tr>'
 EOT;
 			}
@@ -224,8 +240,30 @@ EOT;
 		var timer = setInterval(function() {count();  }, 1000);
 EOT;
 
-		if( $u2fChallenge ) $overlay .= " if (typeof u2f !== 'object' || typeof u2f.sign !== 'function'){ var u2f_activate = document.getElementById('u2f_activate'); u2f_activate.innerHTML = '[Not Supported]'; u2f_activate.style.color='red'; }" . "\r\n";
-		if( $u2fChallenge ) $overlay .= " else { console.log(".$u2fChallenge.");  u2f.sign([".$u2fChallenge."], function(response) { document.getElementsByName('openotp_u2f')[0].value = JSON.stringify(response); document.getElementById('login-form-otp').submit(); }, $timeout ); }" . "\r\n";
+
+		if( $u2fChallenge ){ 
+			$overlay .= " jQuery(document).ready(function(){ " . "\r\n";
+			$overlay .= "if (/chrome|chromium|firefox|opera/.test(navigator.userAgent.toLowerCase())) {
+			    var u2f_request = ".$u2fChallenge.";
+			    var u2f_regkeys = [];
+			    for (var i=0, len=u2f_request.keyHandles.length; i<len; i++) {
+			        u2f_regkeys.push({version:u2f_request.version,keyHandle:u2f_request.keyHandles[i]});
+			    }
+			    u2f.sign(u2f_request.appId, u2f_request.challenge, u2f_regkeys, function(response) {
+					document.getElementsByName('openotp_u2f')[0].value = JSON.stringify(response); 
+					document.getElementById('login-form-otp').submit();					
+			    }, $timeout ); }" . "\r\n";
+			$overlay .= " else { 
+				var u2f_activate = document.getElementById('u2f_activate'); 
+				u2f_activate.innerHTML = '[Not Supported]'; 
+				u2f_activate.style.color='red'; 
+				}" . "\r\n";
+			$overlay .= " }); " . "\r\n";			
+		}
+		
+		
+		//if( $u2fChallenge ) $overlay .= " if (typeof u2f !== 'object' || typeof u2f.sign !== 'function'){ var u2f_activate = document.getElementById('u2f_activate'); u2f_activate.innerHTML = '[Not Supported]'; u2f_activate.style.color='red'; }" . "\r\n";
+		//if( $u2fChallenge ) $overlay .= " else {  u2f.sign([".$u2fChallenge."], function(response) { document.getElementsByName('openotp_u2f')[0].value = JSON.stringify(response); document.getElementById('login-form-otp').submit(); }, $timeout ); }" . "\r\n";
 
 		return $overlay;
 	}
@@ -241,21 +279,35 @@ EOT;
 				$options['proxy_password'] = $this->proxy_password;
 			}
 		}
+		
+		$stream_context = stream_context_create(array('ssl' => array('verify_peer' => false)));
+		if ($stream_context){
+			$options['stream_context'] = $stream_context;
+		}
+				
 		ini_set('soap.wsdl_cache_enabled', '0');
 		ini_set('soap.wsdl_cache_ttl', '0'); 
-			
-		$soap_client = new SoapClient(dirname(__FILE__).'/openotp.wsdl', $options);
+		
+		try {
+			$soap_client = new SoapClientTimeout(dirname(__FILE__).'/openotp.wsdl', $options);				
+		} catch (Exception $e) {
+			return false;
+		}
+
 		if (!$soap_client) {
 			return false;
 		}
+		$soap_client->setTimeout(30);		
+		$soap_client->setVersion(2);		
 		$this->soap_client = $soap_client;	
+		
 		return true;
 	}
 		
-	public function openOTPSimpleLogin($username, $domain, $password, $remote_add){
+	public function openOTPSimpleLogin($username, $domain, $password, $remote_add, $context){
 		echo $user_settings;
 		if (!$this->soapRequest()) return false;
-		$resp = $this->soap_client->openotpSimpleLogin($username, $domain, $password, $this->client_id, $remote_add, $this->user_settings);
+		$resp = $this->soap_client->openotpSimpleLogin($username, $domain, $password, $this->client_id, $remote_add, $this->user_settings, NULL, $context);
 		
 		return $resp;
 	}
@@ -266,6 +318,46 @@ EOT;
 		
 		return $resp;
 	}
+}
+
+if (extension_loaded('soap')) {
+class SoapClientTimeout extends SoapClient {
+    private $timeout;
+    private $version;
+
+    public function setTimeout ($timeout) {
+        $this->timeout = $timeout;
+    }
+    public function setVersion ($version) {
+        $this->version = $version;
+    }
+
+    public function __doRequest($request, $location, $action, $version, $one_way=false) {
+        if (!$this->timeout) {
+            // Call via parent because we require no timeout
+            $response = parent::__doRequest($request, $location, $action, $version, $one_way);
+        } else {
+            // Call via Curl and use the timeout
+            $curl = curl_init($location);
+
+            curl_setopt($curl, CURLOPT_VERBOSE, false);
+            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($curl, CURLOPT_POST, true);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $request);
+            curl_setopt($curl, CURLOPT_HEADER, false);
+            curl_setopt($curl, CURLOPT_HTTPHEADER, array("Content-Type: text/xml", "API-Version: ".strval($this->version)));
+            curl_setopt($curl, CURLOPT_TIMEOUT, $this->timeout);
+
+            $response = curl_exec($curl);
+            if (curl_errno($curl)) throw new Exception(curl_error($curl));
+            curl_close($curl);
+        }
+
+        if (!$one_way) return ($response);
+    }
+}
+}else{
+	return false;
 }
 
 ?>

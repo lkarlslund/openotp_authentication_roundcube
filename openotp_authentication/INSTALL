@@ -16,7 +16,7 @@ To install and configure the OpenOTP plugin, proceed as follows:
    
 4) Edit the main RoundCube configuration file (config/main.inc.php) under the 
    RoundCube base directory.
-   Add the plugin to the plugin list setting ($rcmail_config['plugins'])
+   Add the plugin to the plugin list setting ($rcmail_config['plugins'] | $config['plugins'])
 
 Note that you must use OpenOTP LDAPOTP Login mode with this plugin because the plugin
 has to get the user LDAP password in order to connect the IMAP back-end. Also note 
