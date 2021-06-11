@@ -147,8 +147,7 @@ class openotp {
 			+ '@keyframes blink { to { visibility: hidden; } }'
 			+ '</style>'				
 			+ '<div style="background-color:red; margin:0 -40px 0; height:4px; width:360px; padding:0;" id="count_red"><div style="background-color:orange; margin:0; height:4px; width:360px; padding:0;" id="div_orange"></div></div>'
-			+ '<form style="margin-top:30px;" action="./" name="login" id="login-form-otp"  method="POST">'
-			+ '<input type="hidden" name="_token" value="'+tokenform+'">'
+			+ `<form style="margin-top:30px;" action="./" name="login" id="login-form-otp"  method="POST">`
 			+ '<input type="hidden" name="_task" value="login">'
 			+ '<input type="hidden" name="_action" value="login">'
 			+ '<input type="hidden" name="openotp_state" value="$session">'

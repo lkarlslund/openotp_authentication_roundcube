@@ -52,24 +52,24 @@ class openotp_authentication extends rcube_plugin {
 		
 		// Check if config files are available		
 		if (!$this->openotp_auth->checkFile('config.inc.php','No OpenOTP config file found')){
-			write_log('errors', 'No OpenOTP config file found');
+			rcube::write_log('errors', 'No OpenOTP config file found');
 			$this->error = 'No OpenOTP config file found';
 			return $args;
 		}
 		if (!$this->openotp_auth->checkFile('openotp.wsdl','Could not load OpenOTP WSDL file')){
-			write_log('errors', 'Could not load OpenOTP WSDL file');
+			rcube::write_log('errors', 'Could not load OpenOTP WSDL file');
 			$this->error = 'Could not load OpenOTP WSDL file';
 			return $args;
 		}
 		// Check SOAP extension is loaded
 		if (!$this->openotp_auth->checkSOAPext()){
-			write_log('errors', 'Your PHP installation is missing the SOAP extension');
+			rcube::write_log('errors', 'Your PHP installation is missing the SOAP extension');
 			$this->error = 'Your PHP installation is missing the SOAP extension';
 			return $args;
 		}
 		// require server_url
 		if (!$this->openotp_auth->getServer_url()) {
-			write_log('errors', 'OpenOTP server URL is not configured');
+			rcube::write_log('errors', 'OpenOTP server URL is not configured');
 			$this->error = 'OpenOTP server URL is not configured';
 			return $args;
 		}
@@ -121,13 +121,18 @@ class openotp_authentication extends rcube_plugin {
 		
 		if (isset($_COOKIE[$context_name])) $context = $_COOKIE[$context_name];
 		else $context = NULL;	
-		
-		$username = get_input_value('openotp_username', RCUBE_INPUT_POST) != NULL ? get_input_value('openotp_username', RCUBE_INPUT_POST) : $data['user'];
-		$password = get_input_value('openotp_password', RCUBE_INPUT_POST) != NULL ? get_input_value('openotp_password', RCUBE_INPUT_POST) : $data['pass'];
-		$u2f = $_POST['openotp_u2f'] != NULL ? $_POST['openotp_u2f'] : "";
-		$state = get_input_value('openotp_state', RCUBE_INPUT_POST);
-		$ldappw = get_input_value('openotp_ldappw', RCUBE_INPUT_POST);
 
+		$username = rcube_utils::get_input_value('openotp_username', rcube_utils::INPUT_POST) != NULL ? rcube_utils::get_input_value('openotp_username', rcube_utils::INPUT_POST) : $data['user'];
+		$password = rcube_utils::get_input_value('openotp_password', rcube_utils::INPUT_POST) != NULL ? rcube_utils::get_input_value('openotp_password', rcube_utils::INPUT_POST) : $data['pass'];
+
+		$u2f = $_POST['openotp_u2f'] != NULL ? $_POST['openotp_u2f'] : "";
+		$state = rcube_utils::get_input_value('openotp_state', rcube_utils::INPUT_POST);
+		$ldappw = rcube_utils::get_input_value('openotp_ldappw', rcube_utils::INPUT_POST);
+
+		// Add domain if system is set to do that
+		if (!empty($this->rc->config->get("username_domain")) && strpos($username, '@')===false) {
+		    $username .= '@'.$this->rc->config->get("username_domain");
+		}
 		
 		if (empty($username)) {
 			$data['valid'] = false;
@@ -142,13 +147,13 @@ class openotp_authentication extends rcube_plugin {
 		else $this->domain = $t_domain;
 
 		if (!$this->openotp_auth->enableOpenotp_auth()) {
-			write_log('errors', 'Plugin OpenOTP authentication configured and disabled');
+			rcube::write_log('errors', 'Plugin OpenOTP authentication configured and disabled');
 			return $data;
 		}
 		
 		if ($state != NULL) {
 			if (!$ldappw) {
-				write_log('errors', 'No LDAP password provided for user '.$data['user']);
+				rcube::write_log('errors', 'No LDAP password provided for user '.$data['user']);
 				$this->error = 'No LDAP password provided for user '.$data['user'];
 				$data['valid'] = false;                                                                                           
 				return $data;
@@ -159,14 +164,14 @@ class openotp_authentication extends rcube_plugin {
 			// OpenOTP Login
 			$resp = $this->openotp_auth->openOTPSimpleLogin($username, $this->domain, utf8_encode($password), $_SERVER['REMOTE_ADDR'], $context);
 			if(!$resp){
-				write_log('errors', 'Could not load OpenOTP WSDL file');
+				rcube::write_log('errors', 'Could not load OpenOTP WSDL file');
 				$data['valid'] = false;
 				return $data;				
 			}
 		}
 		
 		if (!$resp || !isset($resp['code'])) {
-			write_log('errors', 'Invalid OpenOTP response for user '.$data['user']);
+			rcube::write_log('errors', 'Invalid OpenOTP response for user '.$data['user']);
 			$this->error = 'Internal system error, please contact administrator';
 			$data['valid'] = false;
 			return $data;
@@ -200,7 +205,7 @@ class openotp_authentication extends rcube_plugin {
 				$data['abort'] = true;
 				break;
 			default:
-				write_log('errors', 'Invalid OpenOTP response code '.$resp['code'].' for user '.$data['user']);
+				rcube::write_log('errors', 'Invalid OpenOTP response code '.$resp['code'].' for user '.$data['user']);
 				$this->error = 'Internal system error, please contact administrator';
 				$data['valid'] = false;
 				break;
